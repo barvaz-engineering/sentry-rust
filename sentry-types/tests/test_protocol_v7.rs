@@ -817,6 +817,76 @@ mod test_debug_meta {
              \"8c954262-f905-4992-8a61-f60825f4553b\"}]}}"
         );
     }
+
+    fn sourcemap_event(debug_file: Option<String>, debug_id: &str) -> v7::Event<'static> {
+        v7::Event {
+            event_id: event_id(),
+            timestamp: event_time(),
+            debug_meta: Cow::Owned(v7::DebugMeta {
+                images: vec![v7::SourceMapDebugImage {
+                    code_file: "app:///assets/index-abc123.js".into(),
+                    debug_id: debug_id.parse().unwrap(),
+                    debug_file,
+                }
+                .into()],
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_debug_meta_sourcemap_image() {
+        let event = sourcemap_event(None, "494f3aea-88fa-4296-9644-fa8ef5d139b6");
+
+        assert_roundtrip(&event);
+        assert_eq!(
+            serde_json::to_string(&event).unwrap(),
+            "{\"event_id\":\"d43e86c96e424a93a4fbda156dd17341\",\"timestamp\":1514103120,\
+             \"debug_meta\":{\"images\":[{\"type\":\"sourcemap\",\"code_file\":\
+             \"app:///assets/index-abc123.js\",\"debug_id\":\
+             \"494f3aea-88fa-4296-9644-fa8ef5d139b6\"}]}}"
+        );
+    }
+
+    #[test]
+    fn test_debug_meta_sourcemap_image_with_debug_file() {
+        let event = sourcemap_event(
+            Some("app:///assets/index-abc123.js.map".into()),
+            "494f3aea-88fa-4296-9644-fa8ef5d139b6",
+        );
+
+        assert_roundtrip(&event);
+        assert!(serde_json::to_string(&event)
+            .unwrap()
+            .contains("\"debug_file\":\"app:///assets/index-abc123.js.map\""));
+    }
+
+    #[test]
+    fn test_debug_meta_unknown_image_type_is_rejected() {
+        let json = "{\"event_id\":\"d43e86c96e424a93a4fbda156dd17341\",\"timestamp\":1514103120,\
+                    \"debug_meta\":{\"images\":[{\"type\":\"brand_new_thing\"}]}}";
+        assert!(serde_json::from_str::<v7::Event>(json).is_err());
+    }
+
+    #[test]
+    fn test_debug_meta_sourcemap_image_with_invalid_debug_id_is_rejected() {
+        let json = "{\"event_id\":\"d43e86c96e424a93a4fbda156dd17341\",\"timestamp\":1514103120,\
+                    \"debug_meta\":{\"images\":[{\"type\":\"sourcemap\",\"code_file\":\"x\",\
+                    \"debug_id\":\"not-an-id\"}]}}";
+        assert!(serde_json::from_str::<v7::Event>(json).is_err());
+    }
+
+    #[test]
+    fn test_debug_meta_sourcemap_image_with_appendix_round_trips() {
+        let event = sourcemap_event(None, "494f3aea-88fa-4296-9644-fa8ef5d139b6-1");
+
+        assert!(matches!(
+            event.debug_meta.images[..],
+            [v7::DebugImage::SourceMap(_)]
+        ));
+        assert_roundtrip(&event);
+    }
 }
 
 mod test_exception {
